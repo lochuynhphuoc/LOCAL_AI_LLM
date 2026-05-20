@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="GigaChat">
+  <rect width="64" height="64" rx="14" fill="#171717"/>
+  <path d="M16 36c10-2 18-10 20-20 8 4 12 12 12 20 0 12-10 22-22 22-8 0-16-4-20-10 4 2 7 2 10 2z" fill="#4CAF50"/>
+  <path d="M30 20c2 8 2 18-2 26" stroke="#81C784" stroke-width="4" stroke-linecap="round" fill="none"/>
+</svg>
