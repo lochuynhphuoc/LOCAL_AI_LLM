@@ -47,17 +47,17 @@ GigaChat is a **100% local** AI chatbot designed for smart farming consultations
 
 ## Features
 
-| Feature | Description |
-|---|---|
-| 💬 **Streaming Chat** | Real-time token streaming for a responsive conversational experience |
-| 📚 **RAG Document Search** | Upload your documents and ask questions — the AI cites its sources |
-| 🌐 **Vietnamese Optimized** | Model and embeddings chosen for strong Vietnamese language support |
-| 🔒 **Fully Local** | Everything runs on your machine. Zero data sent externally |
-| 📱 **Network Access** | Access the chatbot from phones/tablets on the same network |
-| 📁 **Multi-format Upload** | PDF, DOCX, XLSX, CSV, PPTX, images (OCR), code files, and more |
-| 🎨 **Premium UI** | Glassmorphism dark theme with smooth animations built on Next.js 15 |
-| 📌 **Conversation Management** | Pin, rename, delete, and export consultation history |
-| ⚙️ **Configurable** | Adjust model, temperature, context length, and RAG parameters |
+| Feature                             | Description                                                          |
+| ----------------------------------- | -------------------------------------------------------------------- |
+| 💬**Streaming Chat**          | Real-time token streaming for a responsive conversational experience |
+| 📚**RAG Document Search**     | Upload your documents and ask questions — the AI cites its sources  |
+| 🌐**Vietnamese Optimized**    | Model and embeddings chosen for strong Vietnamese language support   |
+| 🔒**Fully Local**             | Everything runs on your machine. Zero data sent externally           |
+| 📱**Network Access**          | Access the chatbot from phones/tablets on the same network           |
+| 📁**Multi-format Upload**     | PDF, DOCX, XLSX, CSV, PPTX, images (OCR), code files, and more       |
+| 🎨**Premium UI**              | Glassmorphism dark theme with smooth animations built on Next.js 15  |
+| 📌**Conversation Management** | Pin, rename, delete, and export consultation history                 |
+| ⚙️**Configurable**          | Adjust model, temperature, context length, and RAG parameters        |
 
 ---
 
@@ -88,6 +88,7 @@ GigaChat is a **100% local** AI chatbot designed for smart farming consultations
 ```
 
 **Request Flow:**
+
 1. User opens the UI in the browser (port 80)
 2. Nginx reverse-proxies `/api/*` requests to FastAPI and everything else to Next.js
 3. FastAPI communicates with Ollama for LLM inference and Qdrant for vector search
@@ -97,29 +98,29 @@ GigaChat is a **100% local** AI chatbot designed for smart farming consultations
 
 ## Tech Stack
 
-| Layer | Technology | Purpose |
-|---|---|---|
-| **LLM** | [Ollama](https://ollama.com/) + Qwen3 8B | Vietnamese-capable local language model |
-| **Embeddings** | [BGE-M3](https://huggingface.co/BAAI/bge-m3) (FlagEmbedding) | Multilingual dense embeddings (1024-dim) |
-| **Vector DB** | [Qdrant](https://qdrant.tech/) | High-performance vector similarity search |
-| **Backend** | [FastAPI](https://fastapi.tiangolo.com/) + Python 3.11 | REST API, streaming SSE, RAG orchestration |
-| **Frontend** | [Next.js 15](https://nextjs.org/) + React 18 + TailwindCSS 3 | Premium dark-themed UI with glassmorphism |
-| **Reverse Proxy** | Nginx (Alpine) | Request routing and rate limiting |
-| **OCR** | [Tesseract](https://github.com/tesseract-ocr/tesseract) | Extract text from uploaded images |
-| **Containerization** | Docker Compose | One-command orchestration of all services |
+| Layer                      | Technology                                                | Purpose                                    |
+| -------------------------- | --------------------------------------------------------- | ------------------------------------------ |
+| **LLM**              | [Ollama](https://ollama.com/) + Qwen3 8B                     | Vietnamese-capable local language model    |
+| **Embeddings**       | [BGE-M3](https://huggingface.co/BAAI/bge-m3) (FlagEmbedding) | Multilingual dense embeddings (1024-dim)   |
+| **Vector DB**        | [Qdrant](https://qdrant.tech/)                               | High-performance vector similarity search  |
+| **Backend**          | [FastAPI](https://fastapi.tiangolo.com/) + Python 3.11       | REST API, streaming SSE, RAG orchestration |
+| **Frontend**         | [Next.js 15](https://nextjs.org/) + React 18 + TailwindCSS 3 | Premium dark-themed UI with glassmorphism  |
+| **Reverse Proxy**    | Nginx (Alpine)                                            | Request routing and rate limiting          |
+| **OCR**              | [Tesseract](https://github.com/tesseract-ocr/tesseract)      | Extract text from uploaded images          |
+| **Containerization** | Docker Compose                                            | One-command orchestration of all services  |
 
 ---
 
 ## Prerequisites
 
-| Requirement | Minimum |
-|---|---|
-| **OS** | Windows 10/11 (WSL2), macOS, or Linux |
-| **Docker Desktop** | Latest version with WSL2 engine enabled |
-| **RAM** | 16 GB (8 GB for the model + system) |
-| **GPU** | NVIDIA GPU with 8+ GB VRAM (recommended) |
+| Requirement              | Minimum                                  |
+| ------------------------ | ---------------------------------------- |
+| **OS**             | Windows 10/11 (WSL2), macOS, or Linux    |
+| **Docker Desktop** | Latest version with WSL2 engine enabled  |
+| **RAM**            | 16 GB (8 GB for the model + system)      |
+| **GPU**            | NVIDIA GPU with 8+ GB VRAM (recommended) |
 | **NVIDIA Drivers** | Latest (for GPU acceleration via Docker) |
-| **Disk Space** | ~10 GB (model weights + Docker images) |
+| **Disk Space**     | ~10 GB (model weights + Docker images)   |
 
 > **Note:** GigaChat can run CPU-only, but GPU acceleration significantly improves response speed.
 
@@ -130,7 +131,7 @@ GigaChat is a **100% local** AI chatbot designed for smart farming consultations
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/<your-username>/LOCAL_AI_LLM.git
+git clone https://github.com/lochuynhphuoc/LOCAL_AI_LLM.git
 cd LOCAL_AI_LLM
 ```
 
@@ -141,6 +142,7 @@ docker compose up --build
 ```
 
 The first run will:
+
 - Build the FastAPI and Next.js Docker images
 - Pull the Ollama, Qdrant, and Nginx images
 - Download the Qwen3 8B model (~5 GB) on the first chat request
@@ -187,6 +189,7 @@ When GigaChat starts, the backend prints all available network addresses in the 
 ```
 
 **Steps:**
+
 1. Make sure the other device is on the **same Wi-Fi/LAN network**
 2. Open the `Network` URL shown in the console (e.g., `http://192.168.1.100`)
 3. If it doesn't work, check your **firewall** allows inbound connections on port 80
@@ -197,15 +200,15 @@ When GigaChat starts, the backend prints all available network addresses in the 
 
 All configuration is done via environment variables in [`docker-compose.yml`](docker-compose.yml):
 
-| Variable | Default | Description |
-|---|---|---|
-| `OLLAMA_MODEL` | `qwen3:8b` | Ollama model name (change to any supported model) |
-| `OLLAMA_NUM_CTX` | `8192` | Context window size (tokens) |
-| `OLLAMA_NUM_PARALLEL` | `2` | Max concurrent Ollama requests |
-| `OLLAMA_MAX_LOADED_MODELS` | `1` | Max models loaded in memory |
-| `CORS_ORIGINS` | `http://localhost` | Allowed CORS origins (comma-separated) |
-| `QDRANT_URL` | `http://qdrant:6333` | Qdrant vector database URL |
-| `QDRANT_COLLECTION` | `local_ai_docs` | Name of the Qdrant collection |
+| Variable                     | Default                | Description                                       |
+| ---------------------------- | ---------------------- | ------------------------------------------------- |
+| `OLLAMA_MODEL`             | `qwen3:8b`           | Ollama model name (change to any supported model) |
+| `OLLAMA_NUM_CTX`           | `8192`               | Context window size (tokens)                      |
+| `OLLAMA_NUM_PARALLEL`      | `2`                  | Max concurrent Ollama requests                    |
+| `OLLAMA_MAX_LOADED_MODELS` | `1`                  | Max models loaded in memory                       |
+| `CORS_ORIGINS`             | `http://localhost`   | Allowed CORS origins (comma-separated)            |
+| `QDRANT_URL`               | `http://qdrant:6333` | Qdrant vector database URL                        |
+| `QDRANT_COLLECTION`        | `local_ai_docs`      | Name of the Qdrant collection                     |
 
 ### Changing the Model
 
@@ -303,28 +306,28 @@ LOCAL_AI_LLM/
 
 ## Supported File Formats
 
-| Category | Formats |
-|---|---|
-| **Documents** | PDF, DOCX, RTF, TXT, Markdown (.md) |
-| **Spreadsheets** | XLSX, XLS, CSV, TSV |
-| **Presentations** | PPTX |
-| **Data** | JSON, XML |
-| **Images (OCR)** | PNG, JPG, JPEG, GIF, WebP, BMP |
-| **Code** | .py, .js, .ts, .java, .c, .cpp, .html, .css, and other text files |
+| Category                | Formats                                                           |
+| ----------------------- | ----------------------------------------------------------------- |
+| **Documents**     | PDF, DOCX, RTF, TXT, Markdown (.md)                               |
+| **Spreadsheets**  | XLSX, XLS, CSV, TSV                                               |
+| **Presentations** | PPTX                                                              |
+| **Data**          | JSON, XML                                                         |
+| **Images (OCR)**  | PNG, JPG, JPEG, GIF, WebP, BMP                                    |
+| **Code**          | .py, .js, .ts, .java, .c, .cpp, .html, .css, and other text files |
 
 ---
 
 ## Troubleshooting
 
-| Problem | Solution |
-|---|---|
-| Chat is very slow | Ensure GPU is visible to Docker Desktop. Check `nvidia-smi` works inside Docker |
-| API returns 502 | Ollama is still downloading the model. Wait for download to complete |
-| Port 80 is busy | Stop conflicting services (IIS, Apache, etc.) or change the Nginx port in `docker-compose.yml` |
-| Out of memory | Use a smaller model (`qwen3:4b`) or reduce `OLLAMA_NUM_CTX` |
-| Can't access from phone | Check firewall rules. Both devices must be on the same network |
-| Upload fails | Check that the file format is supported. See logs with `docker compose logs fastapi` |
-| BGE-M3 download slow | First upload triggers model download (~2.4 GB). Subsequent uploads are fast |
+| Problem                 | Solution                                                                                         |
+| ----------------------- | ------------------------------------------------------------------------------------------------ |
+| Chat is very slow       | Ensure GPU is visible to Docker Desktop. Check `nvidia-smi` works inside Docker                |
+| API returns 502         | Ollama is still downloading the model. Wait for download to complete                             |
+| Port 80 is busy         | Stop conflicting services (IIS, Apache, etc.) or change the Nginx port in `docker-compose.yml` |
+| Out of memory           | Use a smaller model (`qwen3:4b`) or reduce `OLLAMA_NUM_CTX`                                  |
+| Can't access from phone | Check firewall rules. Both devices must be on the same network                                   |
+| Upload fails            | Check that the file format is supported. See logs with `docker compose logs fastapi`           |
+| BGE-M3 download slow    | First upload triggers model download (~2.4 GB). Subsequent uploads are fast                      |
 
 ### Viewing Logs
 
