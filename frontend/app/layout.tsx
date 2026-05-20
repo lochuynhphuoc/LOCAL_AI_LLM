@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { StoreProvider } from "../components/providers/StoreProvider";
 import "./globals.css";
 
 const inter = Inter({
@@ -21,7 +22,9 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="vi" className={`${inter.variable} dark`}>
-      <body className="font-sans">{children}</body>
+      <body className="font-sans">
+        <StoreProvider>{children}</StoreProvider>
+      </body>
     </html>
   );
 }
