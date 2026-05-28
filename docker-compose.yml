@@ -24,6 +24,7 @@ services:
     volumes:
       - ./backend:/app
       - ./data/uploads:/app/uploads
+      - hf_cache:/root/.cache/huggingface
     depends_on:
       - ollama
       - qdrant
@@ -67,3 +68,4 @@ services:
 volumes:
   ollama_data:
   qdrant_data:
+  hf_cache:

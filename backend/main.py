@@ -43,6 +43,9 @@ class UploadResult(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    import logging
+    import threading
+
     app.state.http_client = httpx.AsyncClient(timeout=None)
     app.state.qdrant = QdrantClient(url=settings.qdrant_url)
     app.state.rag = RagService(
@@ -50,6 +53,19 @@ async def lifespan(app: FastAPI):
         collection=settings.qdrant_collection,
     )
     app.state.rag.ensure_collection()
+    app.state.embedder_ready = False
+
+    # Preload embedding model in background so server starts immediately
+    def _preload():
+        try:
+            logging.warning("⏳ Preloading embedding model (bge-m3) in background...")
+            app.state.rag.ensure_embedder()
+            app.state.embedder_ready = True
+            logging.warning("✅ Embedding model ready.")
+        except Exception:
+            logging.exception("❌ Failed to load embedding model")
+
+    threading.Thread(target=_preload, daemon=True).start()
 
     # Print access addresses for other devices
     _print_access_urls()
@@ -205,15 +221,33 @@ async def chat(request: ChatRequest) -> JSONResponse:
 
 @app.post("/documents/upload")
 async def upload_document(files: List[UploadFile] = File(...)) -> JSONResponse:
+    import logging
+
+    if not getattr(app.state, "embedder_ready", False):
+        raise HTTPException(
+            status_code=503,
+            detail="Embedding model is still loading. Please wait and try again.",
+        )
+
+    logger = logging.getLogger("upload")
     results: List[UploadResult] = []
     upload_dir = Path("/app/uploads")
     upload_dir.mkdir(parents=True, exist_ok=True)
 
     for upload in files:
-        file_path = upload_dir / upload.filename
-        content = await upload.read()
-        file_path.write_bytes(content)
-        chunks = app.state.rag.ingest_file(str(file_path), upload.filename)
-        results.append(UploadResult(filename=upload.filename, chunks=chunks))
+        try:
+            file_path = upload_dir / upload.filename
+            content = await upload.read()
+            file_path.write_bytes(content)
+            logger.info("Processing file: %s (%d bytes)", upload.filename, len(content))
+            chunks = app.state.rag.ingest_file(str(file_path), upload.filename)
+            logger.info("File %s indexed: %d chunks", upload.filename, chunks)
+            results.append(UploadResult(filename=upload.filename, chunks=chunks))
+        except Exception as exc:
+            logger.exception("Failed to process file %s", upload.filename)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to process {upload.filename}: {exc}",
+            )
 
     return JSONResponse({"files": [result.model_dump() for result in results]})

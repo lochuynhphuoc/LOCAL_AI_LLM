@@ -60,6 +60,8 @@ desktop.ini
 # ===========================
 # Uploaded documents (user data)
 # ===========================
+generate_report.py
+docs/
 data/uploads/*
 !data/uploads/.gitkeep
 

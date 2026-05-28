@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Upload } from "lucide-react";
+import { Upload, Loader2 } from "lucide-react";
 import type { UploadResult } from "../../lib/types";
 
 export function UploadZone({
@@ -10,29 +10,52 @@ export function UploadZone({
   onUploaded: (files: UploadResult[]) => void;
 }) {
   const [status, setStatus] = useState("");
+  const [error, setError] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     setStatus("Đang tải lên và lập chỉ mục...");
+    setError(false);
+    setUploading(true);
 
-    const formData = new FormData();
-    Array.from(files).forEach((file) => formData.append("files", file));
+    try {
+      const formData = new FormData();
+      Array.from(files).forEach((file) => formData.append("files", file));
 
-    const response = await fetch("/api/documents/upload", {
-      method: "POST",
-      body: formData
-    });
+      const response = await fetch("/api/documents/upload", {
+        method: "POST",
+        body: formData
+      });
 
-    if (!response.ok) {
-      setStatus("Tải lên thất bại. Hãy thử lại.");
-      return;
+      if (!response.ok) {
+        if (response.status === 413) {
+          setStatus("File quá lớn. Giới hạn tối đa 100MB.");
+        } else if (response.status === 504) {
+          setStatus("Xử lý quá lâu — hãy thử file nhỏ hơn hoặc ít file hơn.");
+        } else if (response.status === 503 || response.status === 429) {
+          setStatus("Server đang bận. Hãy đợi một lát rồi thử lại.");
+        } else {
+          setStatus(`Tải lên thất bại (Lỗi ${response.status}). Hãy thử lại.`);
+        }
+        setError(true);
+        return;
+      }
+
+      const data = await response.json();
+      onUploaded(data.files);
+      setStatus("Hoàn tất. Bạn có thể bật RAG để hỏi tài liệu.");
+      setError(false);
+    } catch (err) {
+      setStatus("Lỗi kết nối mạng. Kiểm tra server đang chạy và thử lại.");
+      setError(true);
+    } finally {
+      setUploading(false);
+      // Reset input so re-uploading the same file triggers onChange
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
-
-    const data = await response.json();
-    onUploaded(data.files);
-    setStatus("Hoàn tất. Bạn có thể bật RAG để hỏi tài liệu.");
   };
 
   return (
@@ -48,7 +71,7 @@ export function UploadZone({
       onDrop={(event) => {
         event.preventDefault();
         setDragging(false);
-        handleFiles(event.dataTransfer.files);
+        if (!uploading) handleFiles(event.dataTransfer.files);
       }}
     >
       <input
@@ -61,18 +84,27 @@ export function UploadZone({
       />
       <div className="flex flex-col items-center gap-3 text-center">
         <div className="rounded-full bg-hover p-3">
-          <Upload className="h-5 w-5 text-muted-foreground" />
+          {uploading ? (
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          ) : (
+            <Upload className="h-5 w-5 text-muted-foreground" />
+          )}
         </div>
         <p className="text-sm text-muted-foreground">
           Kéo thả tài liệu hoặc nhấn để chọn file.
         </p>
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+          disabled={uploading}
+          className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
         >
-          Chọn tài liệu
+          {uploading ? "Đang xử lý..." : "Chọn tài liệu"}
         </button>
-        {status && <p className="text-xs text-muted-foreground">{status}</p>}
+        {status && (
+          <p className={`text-xs ${error ? "text-red-400" : "text-muted-foreground"}`}>
+            {status}
+          </p>
+        )}
       </div>
     </div>
   );
