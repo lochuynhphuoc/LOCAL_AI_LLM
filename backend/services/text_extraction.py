@@ -8,6 +8,7 @@ from xml.etree import ElementTree
 import pandas as pd
 from docx import Document
 from PIL import Image
+import pdfplumber
 from pypdf import PdfReader
 from pptx import Presentation
 from striprtf.striprtf import rtf_to_text
@@ -45,11 +46,133 @@ def extract_text(file_path: str) -> str:
 
 def extract_pdf_pages(file_path: str) -> list[str]:
     path = Path(file_path)
-    reader = PdfReader(str(path))
     pages: list[str] = []
-    for page in reader.pages:
-        pages.append(page.extract_text() or "")
-    return pages
+
+    # Prefer pdfplumber because it can extract both free text and table content.
+    try:
+        with pdfplumber.open(str(path)) as pdf:
+            for page in pdf.pages:
+                parts: list[str] = []
+
+                page_text = page.extract_text() or ""
+                if page_text.strip():
+                    parts.append(page_text)
+
+                tables = page.extract_tables() or []
+                for table_index, table in enumerate(tables):
+                    table_text = _format_pdf_table(table, table_index)
+                    if table_text:
+                        parts.append(table_text)
+
+                pages.append("\n\n".join(parts).strip())
+        return pages
+    except Exception:
+        # Fall back to pypdf so extraction still works even if table parsing fails.
+        reader = PdfReader(str(path))
+        for page in reader.pages:
+            pages.append(page.extract_text() or "")
+        return pages
+
+
+def _format_pdf_table(table: list[list[str | None]], table_index: int) -> str:
+    normalized_rows = _normalize_pdf_table_rows(table)
+    if not normalized_rows:
+        return ""
+
+    header_row_count = _detect_pdf_header_rows(normalized_rows)
+    header_rows = normalized_rows[:header_row_count]
+    data_rows = normalized_rows[header_row_count:]
+
+    headers = _merge_pdf_header_rows(header_rows)
+    if not headers:
+        headers = [f"Cột {index + 1}" for index in range(len(normalized_rows[0]))]
+
+    rows: list[str] = [f"[TABLE {table_index + 1}]", "Tiêu đề cột:"]
+    for index, header in enumerate(headers, start=1):
+        rows.append(f"- Cột {index}: {header}")
+
+    if data_rows:
+        rows.append("Dữ liệu:")
+        for row_index, row in enumerate(data_rows, start=1):
+            pairs: list[str] = []
+            for column_index, value in enumerate(row):
+                if not value:
+                    continue
+                header = headers[column_index] if column_index < len(headers) else f"Cột {column_index + 1}"
+                pairs.append(f"{header}: {value}")
+            if pairs:
+                rows.append(f"- Dòng {row_index}: " + " | ".join(pairs))
+
+    return "\n".join(rows)
+
+
+def _normalize_pdf_table_rows(table: list[list[str | None]]) -> list[list[str]]:
+    width = max((len(row) for row in table), default=0)
+    normalized_rows: list[list[str]] = []
+
+    for raw_row in table:
+        row = [(cell or "").replace("\n", " ").strip() for cell in raw_row]
+        if len(row) < width:
+            row.extend([""] * (width - len(row)))
+        if any(row):
+            normalized_rows.append(row)
+
+    return normalized_rows
+
+
+def _detect_pdf_header_rows(rows: list[list[str]]) -> int:
+    if not rows:
+        return 0
+    if len(rows) == 1:
+        return 1
+
+    header_row_count = 1
+    for index in range(1, min(3, len(rows))):
+        row = rows[index]
+        if _looks_like_pdf_header_row(row):
+            header_row_count += 1
+        else:
+            break
+
+    return header_row_count
+
+
+def _looks_like_pdf_header_row(row: list[str]) -> bool:
+    cells = [cell for cell in row if cell]
+    if not cells:
+        return False
+
+    numeric_cells = sum(1 for cell in cells if any(char.isdigit() for char in cell))
+    short_cells = sum(1 for cell in cells if len(cell.split()) <= 5)
+    sparse_row = sum(1 for cell in row if not cell) >= max(1, len(row) // 2)
+
+    return numeric_cells <= max(1, len(cells) // 3) and (short_cells >= max(1, len(cells) // 2) or sparse_row)
+
+
+def _merge_pdf_header_rows(header_rows: list[list[str]]) -> list[str]:
+    if not header_rows:
+        return []
+
+    width = max(len(row) for row in header_rows)
+    merged_headers: list[str] = []
+
+    for column_index in range(width):
+        parts: list[str] = []
+        for row in header_rows:
+            if column_index >= len(row):
+                continue
+            cell = row[column_index].strip()
+            if not cell:
+                continue
+            if cell not in parts:
+                parts.append(cell)
+
+        if parts:
+            merged_headers.append(" / ".join(parts))
+        else:
+            merged_headers.append(f"Cột {column_index + 1}")
+
+    return merged_headers
 
 
 def _extract_pdf(path: Path) -> str:

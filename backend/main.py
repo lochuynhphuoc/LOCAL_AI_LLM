@@ -20,7 +20,7 @@ if not hasattr(builtins, "Optional"):
 
 from config import settings
 from services.text_extraction import extract_pdf_pages
-from services.rag_service import RagService
+from services.rag_service import RagService, RetrievedChunk
 
 
 class ChatMessage(BaseModel):
@@ -141,7 +141,36 @@ async def health() -> JSONResponse:
     return JSONResponse({"status": "ok"})
 
 
-async def stream_ollama_chat(payload: dict) -> AsyncGenerator[str, None]:
+def _build_rag_context(chunks: List[RetrievedChunk]) -> str:
+    if not chunks:
+        return ""
+
+    parts = []
+    for chunk in chunks:
+        parts.append(f"[Source: {chunk.source} | Chunk: {chunk.index}]\n{chunk.text}")
+    return "\n\n".join(parts)
+
+
+def _build_citation_footer(chunks: List[RetrievedChunk]) -> str:
+    if not chunks:
+        return ""
+
+    unique_refs: List[tuple[str, int]] = []
+    seen: set[tuple[str, int]] = set()
+    for chunk in chunks:
+        key = (chunk.source, chunk.index)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_refs.append(key)
+
+    lines = ["Nguồn tham khảo:"]
+    for source, index in unique_refs:
+        lines.append(f"- [Source: {source} | Chunk: {index}]")
+    return "\n" + "\n".join(lines)
+
+
+async def stream_ollama_chat(payload: dict, citation_footer: str = "") -> AsyncGenerator[str, None]:
     url = f"{settings.ollama_base_url}/v1/chat/completions"
     async with httpx.AsyncClient(timeout=None) as client:
         async with client.stream("POST", url, json=payload) as response:
@@ -154,6 +183,21 @@ async def stream_ollama_chat(payload: dict) -> AsyncGenerator[str, None]:
                 if line.startswith("data: "):
                     data = line[6:]
                     if data == "[DONE]":
+                        if citation_footer:
+                            citation_chunk = {
+                                "id": "rag-citation",
+                                "object": "chat.completion.chunk",
+                                "created": 0,
+                                "model": settings.ollama_model,
+                                "choices": [
+                                    {
+                                        "index": 0,
+                                        "delta": {"content": f"\n\n{citation_footer}"},
+                                        "finish_reason": None,
+                                    }
+                                ],
+                            }
+                            yield f"data: {json.dumps(citation_chunk, ensure_ascii=False)}\n\n"
                         yield "data: [DONE]\n\n"
                         break
                     yield f"data: {data}\n\n"
@@ -170,8 +214,8 @@ def _build_messages(request: ChatRequest, rag_context: str) -> List[dict]:
     messages = [msg.model_dump() for msg in request.messages]
     if rag_context:
         system_prompt = (
-            "You are a helpful assistant. Use the provided context when relevant. "
-            "If the context is insufficient, say so. Include citations in the form "
+            "You are a helpful assistant. Prefer facts from the provided context. "
+            "If the context is insufficient, explicitly say so. Include citations in the form "
             "[Source: file | Chunk: n].\n\nContext:\n"
             f"{rag_context}"
         )
@@ -182,9 +226,12 @@ def _build_messages(request: ChatRequest, rag_context: str) -> List[dict]:
 @app.post("/chat/stream")
 async def chat_stream(request: ChatRequest) -> StreamingResponse:
     rag_context = ""
+    citation_footer = ""
     if request.use_rag:
         query = _last_user_message(request.messages)
-        rag_context = app.state.rag.build_context(query, top_k=request.rag_top_k)
+        retrieved_chunks = app.state.rag.retrieve(query, top_k=request.rag_top_k)
+        rag_context = _build_rag_context(retrieved_chunks)
+        citation_footer = _build_citation_footer(retrieved_chunks)
 
     payload = {
         "model": settings.ollama_model,
@@ -196,7 +243,7 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
     }
 
     async def event_generator() -> AsyncGenerator[str, None]:
-        async for chunk in stream_ollama_chat(payload):
+        async for chunk in stream_ollama_chat(payload, citation_footer=citation_footer):
             yield chunk
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
@@ -205,9 +252,12 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
 @app.post("/chat")
 async def chat(request: ChatRequest) -> JSONResponse:
     rag_context = ""
+    citation_footer = ""
     if request.use_rag:
         query = _last_user_message(request.messages)
-        rag_context = app.state.rag.build_context(query, top_k=request.rag_top_k)
+        retrieved_chunks = app.state.rag.retrieve(query, top_k=request.rag_top_k)
+        rag_context = _build_rag_context(retrieved_chunks)
+        citation_footer = _build_citation_footer(retrieved_chunks)
 
     url = f"{settings.ollama_base_url}/v1/chat/completions"
     payload = {
@@ -227,6 +277,8 @@ async def chat(request: ChatRequest) -> JSONResponse:
 
     data = response.json()
     content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+    if citation_footer:
+        content = f"{content}\n\n{citation_footer}"
     return JSONResponse({"message": content})
 
 

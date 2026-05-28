@@ -50,7 +50,7 @@ GigaChat is a **100% local** AI chatbot designed for smart farming consultations
 | Feature                             | Description                                                          |
 | ----------------------------------- | -------------------------------------------------------------------- |
 | 💬**Streaming Chat**          | Real-time token streaming for a responsive conversational experience |
-| 📚**RAG Document Search**     | Upload your documents and ask questions — the AI cites its sources  |
+| 📚**RAG Document Search**     | Upload your documents, ask questions, and open cited source chunks   |
 | 🌐**Vietnamese Optimized**    | Model and embeddings chosen for strong Vietnamese language support   |
 | 🔒**Fully Local**             | Everything runs on your machine. Zero data sent externally           |
 | 📱**Network Access**          | Access the chatbot from phones/tablets on the same network           |
@@ -239,7 +239,8 @@ User Question → Embed Query → Vector Search (Top-K) → Inject Context → L
 4. **Storage** — Vectors are stored in Qdrant with cosine similarity indexing
 5. **Retrieval** — On query, the top-K most similar chunks are retrieved
 6. **Augmentation** — Retrieved chunks are injected as context into the LLM prompt
-7. **Generation** — The LLM generates an answer citing sources as `[Source: file | Chunk: n]`
+7. **Citation** — The answer includes source references in the form `[Source: file | Chunk: n]`
+8. **Review** — Click a citation to open the source viewer and inspect the highlighted chunk directly in the PDF/text preview
 
 ### Usage
 
@@ -247,6 +248,12 @@ User Question → Embed Query → Vector Search (Top-K) → Inject Context → L
 2. Upload documents (drag & drop or click to select)
 3. Go to the chat and enable **RAG toggle** before sending your question
 4. The AI will reference your documents and cite its sources
+5. Click a citation in chat to open the source viewer; PDFs will show a highlighted page/chunk preview, while non-PDF files show the extracted chunk text
+
+### Notes
+
+- After changing the text extraction pipeline, re-upload documents so Qdrant stores the new chunk content.
+- PDF extraction now uses table-aware parsing, which improves citations for documents that contain multi-row table headers.
 
 ---
 
@@ -273,7 +280,7 @@ LOCAL_AI_LLM/
 │   │   ├── globals.css         # Design system (glassmorphism theme)
 │   │   ├── page.tsx            # Landing page
 │   │   ├── chat/               # Chat page
-│   │   ├── knowledge/          # Knowledge upload page
+│   │   ├── knowledge/          # Knowledge upload page + source viewer
 │   │   └── settings/           # Settings page
 │   ├── components/
 │   │   ├── layout/             # AppShell, Sidebar, Topbar

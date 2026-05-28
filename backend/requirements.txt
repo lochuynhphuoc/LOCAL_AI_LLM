@@ -7,6 +7,7 @@ python-multipart==0.0.12
 qdrant-client==1.11.3
 FlagEmbedding==1.2.11
 pypdf==4.3.1
+pdfplumber==0.11.4
 python-docx==1.1.2
 striprtf==0.0.26
 python-pptx==0.6.23
