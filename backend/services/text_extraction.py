@@ -43,12 +43,17 @@ def extract_text(file_path: str) -> str:
         return ""
 
 
-def _extract_pdf(path: Path) -> str:
+def extract_pdf_pages(file_path: str) -> list[str]:
+    path = Path(file_path)
     reader = PdfReader(str(path))
-    parts = []
+    pages: list[str] = []
     for page in reader.pages:
-        parts.append(page.extract_text() or "")
-    return "\n".join(parts)
+        pages.append(page.extract_text() or "")
+    return pages
+
+
+def _extract_pdf(path: Path) -> str:
+    return "\n".join(extract_pdf_pages(str(path)))
 
 
 def _extract_docx(path: Path) -> str:

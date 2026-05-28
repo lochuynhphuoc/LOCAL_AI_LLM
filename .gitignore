@@ -62,6 +62,7 @@ desktop.ini
 # ===========================
 generate_report.py
 docs/
+BaoCao_GigaChat.docx
 data/uploads/*
 !data/uploads/.gitkeep
 

@@ -10,7 +10,7 @@ import typing
 import httpx
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from qdrant_client import QdrantClient
 
@@ -19,6 +19,7 @@ if not hasattr(builtins, "Optional"):
     builtins.Optional = typing.Optional
 
 from config import settings
+from services.text_extraction import extract_pdf_pages
 from services.rag_service import RagService
 
 
@@ -39,6 +40,16 @@ class ChatRequest(BaseModel):
 class UploadResult(BaseModel):
     filename: str
     chunks: int
+
+
+class SourceDocumentResponse(BaseModel):
+    filename: str
+    text: str
+    chunks: List[str]
+    chunk_index: int
+    chunk_text: str
+    page_texts: List[str] | None = None
+    page_index: int | None = None
 
 
 @asynccontextmanager
@@ -251,3 +262,54 @@ async def upload_document(files: List[UploadFile] = File(...)) -> JSONResponse:
             )
 
     return JSONResponse({"files": [result.model_dump() for result in results]})
+
+
+@app.get("/documents/source")
+async def get_source_document(filename: str, chunk: int = 0) -> JSONResponse:
+    upload_dir = Path("/app/uploads")
+    safe_name = Path(filename).name
+    file_path = upload_dir / safe_name
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Source file not found")
+
+    text = app.state.rag.extract_source_text(str(file_path))
+    chunks = app.state.rag.chunk_source_text(text)
+    if not chunks:
+        raise HTTPException(status_code=404, detail="No extracted text found")
+
+    page_texts: List[str] | None = None
+    page_index: int | None = None
+    if safe_name.lower().endswith(".pdf"):
+        page_texts = extract_pdf_pages(str(file_path))
+        normalized_chunk = " ".join(chunks[max(0, min(chunk, len(chunks) - 1))].split()).casefold()
+        for index, page_text in enumerate(page_texts):
+          normalized_page = " ".join(page_text.split()).casefold()
+          if normalized_chunk and normalized_chunk in normalized_page:
+              page_index = index
+              break
+
+    chunk_index = max(0, min(chunk, len(chunks) - 1))
+    return JSONResponse(
+        SourceDocumentResponse(
+            filename=safe_name,
+            text=text,
+            chunks=chunks,
+            chunk_index=chunk_index,
+            chunk_text=chunks[chunk_index],
+            page_texts=page_texts,
+            page_index=page_index,
+        ).model_dump()
+    )
+
+
+@app.get("/documents/file")
+async def download_source_file(filename: str) -> FileResponse:
+    upload_dir = Path("/app/uploads")
+    safe_name = Path(filename).name
+    file_path = upload_dir / safe_name
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Source file not found")
+
+    return FileResponse(path=file_path, filename=safe_name)

@@ -53,11 +53,11 @@ class RagService:
         return [vector.tolist() for vector in dense]
 
     def ingest_file(self, file_path: str, filename: str) -> int:
-        text = extract_text(file_path)
+        text = self.extract_source_text(file_path)
         if not text.strip():
             return 0
 
-        chunks = chunk_text(text)
+        chunks = self.chunk_source_text(text)
         if not chunks:
             return 0
 
@@ -78,6 +78,12 @@ class RagService:
 
         self._client.upsert(collection_name=self._collection, points=points)
         return len(chunks)
+
+    def extract_source_text(self, file_path: str) -> str:
+        return extract_text(file_path)
+
+    def chunk_source_text(self, text: str) -> List[str]:
+        return chunk_text(text)
 
     def retrieve(self, query: str, top_k: int = 4) -> List[RetrievedChunk]:
         if not query.strip():

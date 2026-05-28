@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { ChatMessage, ChatSettings, Conversation } from "./types";
+import type { ChatMessage, ChatSettings, Conversation, UploadResult } from "./types";
 
 const now = () => new Date().toISOString();
 
@@ -33,9 +33,11 @@ export type ChatState = {
   currentConversationId: string;
   settings: ChatSettings;
   useRag: boolean;
+  uploadHistory: UploadResult[];
   sidebarCollapsed: boolean;
   setUseRag: (value: boolean) => void;
   setSidebarCollapsed: (value: boolean) => void;
+  setUploadHistory: (uploads: UploadResult[]) => void;
   startNewChat: () => void;
   selectConversation: (id: string) => void;
   updateSettings: (settings: Partial<ChatSettings>) => void;
@@ -57,9 +59,14 @@ export const useChatStore = create<ChatState>()(
         currentConversationId: initial.id,
         settings: defaultSettings,
         useRag: false,
+        uploadHistory: [],
         sidebarCollapsed: false,
         setUseRag: (value) => set({ useRag: value }),
         setSidebarCollapsed: (value) => set({ sidebarCollapsed: value }),
+        setUploadHistory: (uploads) =>
+          set((state) => ({
+            uploadHistory: [...uploads, ...state.uploadHistory]
+          })),
         startNewChat: () => {
           const state = get();
           const emptyConvo = state.conversations.find((conv) =>
@@ -173,7 +180,7 @@ export const useChatStore = create<ChatState>()(
     },
     {
       name: "local-ai-chat",
-      version: 2,
+      version: 3,
       migrate: (state) => {
         if (!state || typeof state !== "object") return state;
         const typed = state as ChatState;
@@ -181,6 +188,7 @@ export const useChatStore = create<ChatState>()(
         const maxTokens = Math.max(typed.settings?.maxTokens ?? 0, 16384);
         return {
           ...typed,
+          uploadHistory: typed.uploadHistory ?? [],
           settings: {
             ...typed.settings,
             contextLength,

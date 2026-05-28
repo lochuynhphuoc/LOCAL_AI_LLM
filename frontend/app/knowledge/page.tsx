@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useChatStore } from "../../lib/store";
 import { AppShell } from "../../components/layout/AppShell";
 import { UploadZone } from "../../components/knowledge/UploadZone";
-import type { UploadResult } from "../../lib/types";
 
 export default function KnowledgePage() {
-  const [uploads, setUploads] = useState<UploadResult[]>([]);
+  const uploads = useChatStore((state) => state.uploadHistory);
+  const setUploadHistory = useChatStore((state) => state.setUploadHistory);
 
   return (
     <AppShell title="Plant Knowledge">
@@ -22,7 +22,7 @@ export default function KnowledgePage() {
 
         <div className="space-y-6">
           <UploadZone
-            onUploaded={(files) => setUploads((prev) => [...files, ...prev])}
+            onUploaded={(files) => setUploadHistory(files)}
           />
           <div className="text-xs text-muted-foreground">
             Supported: PDF, DOCX, TXT, MD, CSV, XLSX, JSON, XML, PPTX, code files, images.

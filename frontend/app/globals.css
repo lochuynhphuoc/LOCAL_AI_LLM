@@ -1,3 +1,6 @@
+@import "react-pdf/dist/Page/TextLayer.css";
+@import "react-pdf/dist/Page/AnnotationLayer.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -352,6 +355,17 @@ body {
 
 .markdown p {
   @apply leading-relaxed text-foreground;
+}
+
+.react-pdf__Page {
+  display: inline-block;
+  margin: 0 auto;
+}
+
+.react-pdf__Page__canvas {
+  display: block;
+  max-width: 100%;
+  height: auto !important;
 }
 
 .markdown a {
