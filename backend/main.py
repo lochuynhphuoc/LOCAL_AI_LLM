@@ -42,6 +42,11 @@ class UploadResult(BaseModel):
     chunks: int
 
 
+class DeleteResult(BaseModel):
+    filename: str
+    deleted: bool = True
+
+
 class SourceDocumentResponse(BaseModel):
     filename: str
     text: str
@@ -170,6 +175,51 @@ def _build_citation_footer(chunks: List[RetrievedChunk]) -> str:
     return "\n" + "\n".join(lines)
 
 
+def _upload_dir() -> Path:
+    return Path("/app/uploads")
+
+
+def _list_uploaded_files() -> List[UploadResult]:
+    upload_dir = _upload_dir()
+    if not upload_dir.exists():
+        return []
+
+    results: List[UploadResult] = []
+    for file_path in sorted(
+        (
+            path
+            for path in upload_dir.iterdir()
+            if path.is_file() and not path.name.startswith(".")
+        ),
+        key=lambda path: path.name.lower(),
+    ):
+        try:
+            text = app.state.rag.extract_source_text(str(file_path))
+            chunks = app.state.rag.chunk_source_text(text)
+            results.append(UploadResult(filename=file_path.name, chunks=len(chunks)))
+        except Exception:
+            results.append(UploadResult(filename=file_path.name, chunks=0))
+    return results
+
+
+def _delete_uploaded_file(filename: str) -> None:
+    safe_name = Path(filename).name
+    if safe_name.startswith("."):
+        raise HTTPException(status_code=400, detail="Hidden files cannot be deleted through this endpoint")
+    file_path = _upload_dir() / safe_name
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Source file not found")
+
+    try:
+        app.state.rag.delete_source(safe_name)
+    except Exception:
+        import logging
+
+        logging.exception("Failed to remove vector records for %s", safe_name)
+
+    file_path.unlink()
+
+
 async def stream_ollama_chat(payload: dict, citation_footer: str = "") -> AsyncGenerator[str, None]:
     url = f"{settings.ollama_base_url}/v1/chat/completions"
     async with httpx.AsyncClient(timeout=None) as client:
@@ -282,6 +332,11 @@ async def chat(request: ChatRequest) -> JSONResponse:
     return JSONResponse({"message": content})
 
 
+@app.get("/documents/uploads")
+async def list_uploaded_documents() -> JSONResponse:
+    return JSONResponse({"files": [result.model_dump() for result in _list_uploaded_files()]})
+
+
 @app.post("/documents/upload")
 async def upload_document(files: List[UploadFile] = File(...)) -> JSONResponse:
     import logging
@@ -294,7 +349,7 @@ async def upload_document(files: List[UploadFile] = File(...)) -> JSONResponse:
 
     logger = logging.getLogger("upload")
     results: List[UploadResult] = []
-    upload_dir = Path("/app/uploads")
+    upload_dir = _upload_dir()
     upload_dir.mkdir(parents=True, exist_ok=True)
 
     for upload in files:
@@ -316,10 +371,19 @@ async def upload_document(files: List[UploadFile] = File(...)) -> JSONResponse:
     return JSONResponse({"files": [result.model_dump() for result in results]})
 
 
+@app.delete("/documents/file")
+async def delete_source_file(filename: str) -> JSONResponse:
+    _delete_uploaded_file(filename)
+    safe_name = Path(filename).name
+    return JSONResponse(DeleteResult(filename=safe_name).model_dump())
+
+
 @app.get("/documents/source")
 async def get_source_document(filename: str, chunk: int = 0) -> JSONResponse:
-    upload_dir = Path("/app/uploads")
+    upload_dir = _upload_dir()
     safe_name = Path(filename).name
+    if safe_name.startswith("."):
+        raise HTTPException(status_code=404, detail="Source file not found")
     file_path = upload_dir / safe_name
 
     if not file_path.exists():
@@ -357,8 +421,10 @@ async def get_source_document(filename: str, chunk: int = 0) -> JSONResponse:
 
 @app.get("/documents/file")
 async def download_source_file(filename: str) -> FileResponse:
-    upload_dir = Path("/app/uploads")
+    upload_dir = _upload_dir()
     safe_name = Path(filename).name
+    if safe_name.startswith("."):
+        raise HTTPException(status_code=404, detail="Source file not found")
     file_path = upload_dir / safe_name
 
     if not file_path.exists():

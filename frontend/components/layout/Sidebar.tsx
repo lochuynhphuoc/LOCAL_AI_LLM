@@ -44,6 +44,15 @@ export function Sidebar({
   const router = useRouter();
   const itemClass =
     "sidebar-item";
+
+  const handleDeleteConversation = (id: string, title: string) => {
+    const confirmed = window.confirm(
+      `Xóa cuộc trò chuyện "${title}"? Hành động này không thể hoàn tác.`
+    );
+    if (!confirmed) return;
+    deleteConversation(id);
+  };
+
   const sortedConversations = [...conversations].sort((a, b) => {
     const pinScore = Number(Boolean(b.pinned)) - Number(Boolean(a.pinned));
     if (pinScore !== 0) return pinScore;
@@ -116,7 +125,7 @@ export function Sidebar({
                   <div
                     key={conv.id}
                     className={cn(
-                      "group",
+                      "group grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1",
                       itemClass,
                       conv.id === currentConversationId ? "sidebar-item-active" : ""
                     )}
@@ -127,14 +136,15 @@ export function Sidebar({
                         router.push("/chat");
                       }}
                       className={cn(
-                        "min-w-0 flex-1 text-left",
+                        "min-w-0 overflow-hidden pr-1 text-left",
                         conv.id === currentConversationId
                           ? "text-foreground"
                           : "text-muted-foreground group-hover:text-foreground"
                       )}
+                      title={conv.title}
                     >
-                      <div className="flex items-center gap-1 truncate text-sm">
-                        <span className="truncate">{conv.title}</span>
+                      <div className="flex min-w-0 items-center gap-1 overflow-hidden text-sm">
+                        <span className="min-w-0 truncate">{conv.title}</span>
                         {conv.pinned && <Pin className="h-3.5 w-3.5 text-primary" />}
                       </div>
                       <div className="text-[10px] text-muted-foreground/70">
@@ -142,38 +152,41 @@ export function Sidebar({
                       </div>
                     </button>
 
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          className="icon-ghost flex h-7 w-7 items-center justify-center rounded-md opacity-60 transition group-hover:opacity-100"
-                          aria-label="Chat options"
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() => {
-                            const next = window.prompt("Rename consultation", conv.title);
-                            if (!next) return;
-                            const trimmed = next.trim();
-                            if (!trimmed) return;
-                            setConversationTitle(conv.id, trimmed);
-                          }}
-                        >
-                          <PencilLine className="h-4 w-4" /> Rename
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => togglePin(conv.id)}>
-                          <Pin className="h-4 w-4" /> {conv.pinned ? "Unpin" : "Pin chat"}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => deleteConversation(conv.id)}
-                          className="text-red-300 focus:text-red-200"
-                        >
-                          <Trash2 className="h-4 w-4" /> Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            className="icon-ghost flex h-7 w-7 items-center justify-center rounded-md opacity-0 transition group-hover:opacity-100 focus:opacity-100"
+                            aria-label="Chat options"
+                            title="More options"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => {
+                              const next = window.prompt("Rename consultation", conv.title);
+                              if (!next) return;
+                              const trimmed = next.trim();
+                              if (!trimmed) return;
+                              setConversationTitle(conv.id, trimmed);
+                            }}
+                          >
+                            <PencilLine className="h-4 w-4" /> Rename
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => togglePin(conv.id)}>
+                            <Pin className="h-4 w-4" /> {conv.pinned ? "Unpin" : "Pin chat"}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleDeleteConversation(conv.id, conv.title)}
+                            className="text-red-300 focus:text-red-200"
+                          >
+                            <Trash2 className="h-4 w-4" /> Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
                 ))}
               </div>

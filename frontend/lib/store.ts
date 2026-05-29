@@ -4,6 +4,8 @@ import type { ChatMessage, ChatSettings, Conversation, UploadResult } from "./ty
 
 const now = () => new Date().toISOString();
 
+const DEFAULT_CONVERSATION_TITLE = "New consultation";
+
 const defaultSettings: ChatSettings = {
   temperature: 0.7,
   maxTokens: 16384,
@@ -14,7 +16,7 @@ const defaultSettings: ChatSettings = {
 
 const seedConversation = (): Conversation => ({
   id: crypto.randomUUID(),
-  title: "New consultation",
+  title: DEFAULT_CONVERSATION_TITLE,
   model: "Qwen3-8B Q4_K_M",
   pinned: false,
   messages: [
@@ -38,6 +40,7 @@ export type ChatState = {
   setUseRag: (value: boolean) => void;
   setSidebarCollapsed: (value: boolean) => void;
   setUploadHistory: (uploads: UploadResult[]) => void;
+  replaceUploadHistory: (uploads: UploadResult[]) => void;
   startNewChat: () => void;
   selectConversation: (id: string) => void;
   updateSettings: (settings: Partial<ChatSettings>) => void;
@@ -67,6 +70,7 @@ export const useChatStore = create<ChatState>()(
           set((state) => ({
             uploadHistory: [...uploads, ...state.uploadHistory]
           })),
+        replaceUploadHistory: (uploads) => set({ uploadHistory: uploads }),
         startNewChat: () => {
           const state = get();
           const emptyConvo = state.conversations.find((conv) =>
@@ -180,14 +184,32 @@ export const useChatStore = create<ChatState>()(
     },
     {
       name: "local-ai-chat",
-      version: 3,
+      version: 4,
       migrate: (state) => {
         if (!state || typeof state !== "object") return state;
         const typed = state as ChatState;
         const contextLength = Math.max(typed.settings?.contextLength ?? 0, 16384);
         const maxTokens = Math.max(typed.settings?.maxTokens ?? 0, 16384);
+        // Normalize/truncate old conversation titles so very long titles
+        // do not push action buttons off-screen and to ensure delete is reachable.
+        const normalizeTitle = (title?: string) => {
+          if (!title) return DEFAULT_CONVERSATION_TITLE;
+          const words = title.trim().split(/\s+/);
+          // Keep at most 5 words, then enforce a 32-char limit
+          const short = words.slice(0, 5).join(" ");
+          if (words.length <= 5 && short.length <= 32) return title;
+          const truncated = short.slice(0, 32).trim();
+          return truncated.length ? truncated : DEFAULT_CONVERSATION_TITLE;
+        };
+
+        const conversations = (typed.conversations || []).map((c: any) => ({
+          ...c,
+          title: normalizeTitle(c.title)
+        }));
+
         return {
           ...typed,
+          conversations,
           uploadHistory: typed.uploadHistory ?? [],
           settings: {
             ...typed.settings,

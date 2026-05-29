@@ -14,6 +14,7 @@ import { getCurrentConversation, useChatStore } from "../../lib/store";
 import type { ChatMessage } from "../../lib/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
+const DEFAULT_CONVERSATION_TITLE = "New consultation";
 
 const estimateTokens = (text: string) => Math.max(1, Math.ceil(text.length / 4));
 const SUGGESTIONS = [
@@ -32,6 +33,7 @@ export default function ChatPage() {
     updateMessage,
     setMessages,
     setModel,
+    setConversationTitle,
     useRag
   } = useChatStore();
   const conversation = useChatStore(getCurrentConversation);
@@ -45,11 +47,57 @@ export default function ChatPage() {
 
   const { containerRef, endRef, showScroll, scrollToBottom } = useScrollAnchor(!isEmpty);
 
+  const shouldAutoRenameConversation = () => {
+    return (
+      conversation.title === DEFAULT_CONVERSATION_TITLE ||
+      conversation.title.trim().length === 0
+    );
+  };
+
+  const generateConversationTitle = async (question: string, answer: string) => {
+    const systemPrompt =
+      "You write very short chat titles for an agriculture assistant. Return exactly one short title, no quotes, no bullet points, no explanation, max 5 words.";
+
+    const payload = {
+      messages: [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content:
+            `User question: ${question}\n` +
+            `Assistant answer: ${answer}\n\n` +
+            "Create a concise title that summarizes the topic."
+        }
+      ],
+      temperature: 0.2,
+      max_tokens: 24,
+      stream: false,
+      use_rag: false
+    };
+
+    const response = await fetch(`${API_URL}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) return "";
+
+    const data = (await response.json()) as { message?: string };
+    const rawTitle = (data.message || "").replace(/["'`]/g, "").replace(/\s+/g, " ").trim();
+    if (!rawTitle) return "";
+
+    const cleaned = rawTitle.replace(/^title\s*:\s*/i, "").trim();
+    const compact = cleaned.split(" ").slice(0, 5).join(" ");
+    const finalTitle = compact.length > 32 ? `${compact.slice(0, 29).trim()}...` : compact;
+    return finalTitle;
+  };
+
   const startStream = async (
     messages: ChatMessage[],
     assistantId: string,
     conversationId: string
-  ) => {
+  ): Promise<string> => {
     const systemPrompt = settings.systemPrompt?.trim();
     const finalMessages = systemPrompt
       ? [{ role: "system", content: systemPrompt }, ...messages]
@@ -100,6 +148,8 @@ export default function ChatPage() {
         }
       }
     }
+
+    return assistantText;
   };
 
   const handleSend = async () => {
@@ -107,6 +157,7 @@ export default function ChatPage() {
     if (!content || isStreaming) return;
 
     const conversationId = conversation.id;
+    const isFirstUserMessage = !conversation.messages.some((msg) => msg.role === "user");
 
     setInput("");
     const userMessage: ChatMessage = {
@@ -130,11 +181,18 @@ export default function ChatPage() {
     setIsStreaming(true);
 
     try {
-      await startStream(
+      const assistantText = await startStream(
         [...conversation.messages, userMessage, assistantMessage],
         assistantMessage.id,
         conversationId
       );
+
+      if (isFirstUserMessage && shouldAutoRenameConversation() && assistantText.trim()) {
+        const title = await generateConversationTitle(content, assistantText);
+        if (title) {
+          setConversationTitle(conversationId, title);
+        }
+      }
     } catch {
       updateMessage(
         assistantMessage.id,

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from pathlib import Path
 import uuid
 from dataclasses import dataclass
 from typing import List, Sequence
 
 from qdrant_client import QdrantClient
+from qdrant_client import models
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
 from services.chunking import chunk_text
@@ -100,14 +102,32 @@ class RagService:
         chunks: List[RetrievedChunk] = []
         for item in results:
             payload = item.payload or {}
+            source = str(payload.get("source", ""))
+            if source and not (Path("/app/uploads") / Path(source).name).exists():
+                continue
             chunks.append(
                 RetrievedChunk(
                     text=str(payload.get("text", "")),
-                    source=str(payload.get("source", "")),
+                    source=source,
                     index=int(payload.get("index", 0)),
                 )
             )
         return chunks
+
+    def delete_source(self, source: str) -> None:
+        self._client.delete(
+            collection_name=self._collection,
+            points_selector=models.FilterSelector(
+                filter=models.Filter(
+                    must=[
+                        models.FieldCondition(
+                            key="source",
+                            match=models.MatchValue(value=source),
+                        )
+                    ]
+                )
+            ),
+        )
 
     def build_context(self, query: str, top_k: int = 4) -> str:
         chunks = self.retrieve(query, top_k=top_k)
