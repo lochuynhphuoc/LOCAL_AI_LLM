@@ -1,11 +1,11 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AppShell } from "../../../components/layout/AppShell";
 import { cn } from "../../../lib/utils";
-import { PdfSourceViewer } from "../../../components/knowledge/PdfSourceViewer";
 
 type SourceDocumentResponse = {
   filename: string;
@@ -18,6 +18,18 @@ type SourceDocumentResponse = {
 };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
+
+const PdfSourceViewer = dynamic(
+  () => import("../../../components/knowledge/PdfSourceViewer").then((mod) => mod.PdfSourceViewer),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="rounded-2xl border border-border bg-card/60 p-4 text-sm text-muted-foreground">
+        Loading PDF preview...
+      </div>
+    )
+  }
+);
 
 export default function SourceDocumentPage() {
   const searchParams = useSearchParams();

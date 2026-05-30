@@ -14,7 +14,6 @@ import { getCurrentConversation, useChatStore } from "../../lib/store";
 import type { ChatMessage } from "../../lib/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
-const DEFAULT_CONVERSATION_TITLE = "New consultation";
 
 const estimateTokens = (text: string) => Math.max(1, Math.ceil(text.length / 4));
 const SUGGESTIONS = [
@@ -33,7 +32,6 @@ export default function ChatPage() {
     updateMessage,
     setMessages,
     setModel,
-    setConversationTitle,
     useRag
   } = useChatStore();
   const conversation = useChatStore(getCurrentConversation);
@@ -47,57 +45,11 @@ export default function ChatPage() {
 
   const { containerRef, endRef, showScroll, scrollToBottom } = useScrollAnchor(!isEmpty);
 
-  const shouldAutoRenameConversation = () => {
-    return (
-      conversation.title === DEFAULT_CONVERSATION_TITLE ||
-      conversation.title.trim().length === 0
-    );
-  };
-
-  const generateConversationTitle = async (question: string, answer: string) => {
-    const systemPrompt =
-      "You write very short chat titles for an agriculture assistant. Return exactly one short title, no quotes, no bullet points, no explanation, max 5 words.";
-
-    const payload = {
-      messages: [
-        { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content:
-            `User question: ${question}\n` +
-            `Assistant answer: ${answer}\n\n` +
-            "Create a concise title that summarizes the topic."
-        }
-      ],
-      temperature: 0.2,
-      max_tokens: 24,
-      stream: false,
-      use_rag: false
-    };
-
-    const response = await fetch(`${API_URL}/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) return "";
-
-    const data = (await response.json()) as { message?: string };
-    const rawTitle = (data.message || "").replace(/["'`]/g, "").replace(/\s+/g, " ").trim();
-    if (!rawTitle) return "";
-
-    const cleaned = rawTitle.replace(/^title\s*:\s*/i, "").trim();
-    const compact = cleaned.split(" ").slice(0, 5).join(" ");
-    const finalTitle = compact.length > 32 ? `${compact.slice(0, 29).trim()}...` : compact;
-    return finalTitle;
-  };
-
   const startStream = async (
     messages: ChatMessage[],
     assistantId: string,
     conversationId: string
-  ): Promise<string> => {
+  ) => {
     const systemPrompt = settings.systemPrompt?.trim();
     const finalMessages = systemPrompt
       ? [{ role: "system", content: systemPrompt }, ...messages]
@@ -130,26 +82,42 @@ export default function ChatPage() {
     const reader = response.body.getReader();
     const decoder = new TextDecoder("utf-8");
     let assistantText = "";
+    let buffer = "";
+
+    const flushEvent = (event: string) => {
+      const trimmed = event.trim();
+      if (!trimmed.startsWith("data: ")) return;
+
+      const data = trimmed.replace(/^data: /, "").trim();
+      if (!data || data === "[DONE]") return;
+
+      const json = JSON.parse(data);
+      const delta = json.choices?.[0]?.delta?.content;
+      if (delta) {
+        assistantText += delta;
+        updateMessage(assistantId, assistantText, conversationId);
+      }
+    };
 
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = decoder.decode(value, { stream: true });
-      const lines = chunk.split("\n\n");
-      for (const line of lines) {
-        if (!line.startsWith("data: ")) continue;
-        const data = line.replace("data: ", "").trim();
-        if (!data || data === "[DONE]") continue;
-        const json = JSON.parse(data);
-        const delta = json.choices?.[0]?.delta?.content;
-        if (delta) {
-          assistantText += delta;
-          updateMessage(assistantId, assistantText, conversationId);
-        }
+      if (done) {
+        buffer += decoder.decode();
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+
+      const events = buffer.split("\n\n");
+      buffer = events.pop() ?? "";
+      for (const event of events) {
+        flushEvent(event);
       }
     }
 
-    return assistantText;
+    if (buffer.trim()) {
+      flushEvent(buffer);
+    }
   };
 
   const handleSend = async () => {
@@ -157,7 +125,6 @@ export default function ChatPage() {
     if (!content || isStreaming) return;
 
     const conversationId = conversation.id;
-    const isFirstUserMessage = !conversation.messages.some((msg) => msg.role === "user");
 
     setInput("");
     const userMessage: ChatMessage = {
@@ -181,27 +148,32 @@ export default function ChatPage() {
     setIsStreaming(true);
 
     try {
-      const assistantText = await startStream(
+      await startStream(
         [...conversation.messages, userMessage, assistantMessage],
         assistantMessage.id,
         conversationId
       );
-
-      if (isFirstUserMessage && shouldAutoRenameConversation() && assistantText.trim()) {
-        const title = await generateConversationTitle(content, assistantText);
-        if (title) {
-          setConversationTitle(conversationId, title);
-        }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return;
       }
-    } catch {
-      updateMessage(
-        assistantMessage.id,
-        "Không thể kết nối đến backend. Hãy kiểm tra Docker Compose và Ollama.",
-        conversationId
-      );
+
+      const currentAssistant = useChatStore
+        .getState()
+        .conversations.flatMap((conversation) => conversation.messages)
+        .find((message) => message.id === assistantMessage.id);
+
+      if (!currentAssistant?.content.trim()) {
+        updateMessage(
+          assistantMessage.id,
+          "Không thể kết nối đến backend. Hãy kiểm tra Docker Compose và Ollama.",
+          conversationId
+        );
+      }
     } finally {
       setIsStreaming(false);
       scrollToBottom();
+      abortRef.current = null;
     }
   };
 
@@ -223,12 +195,23 @@ export default function ChatPage() {
     setIsStreaming(true);
     try {
       await startStream(conversation.messages, lastAssistant.id, conversationId);
-    } catch {
-      updateMessage(
-        lastAssistant.id,
-        "Không thể kết nối đến backend. Hãy kiểm tra Docker Compose và Ollama.",
-        conversationId
-      );
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return;
+      }
+
+      const currentAssistant = useChatStore
+        .getState()
+        .conversations.flatMap((conversation) => conversation.messages)
+        .find((message) => message.id === lastAssistant.id);
+
+      if (!currentAssistant?.content.trim()) {
+        updateMessage(
+          lastAssistant.id,
+          "Không thể kết nối đến backend. Hãy kiểm tra Docker Compose và Ollama.",
+          conversationId
+        );
+      }
     } finally {
       setIsStreaming(false);
     }
